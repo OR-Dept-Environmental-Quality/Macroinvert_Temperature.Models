@@ -9,7 +9,7 @@
 
 #				HIGH taxonomic resolution models
 
-
+ 
 # packages used
 library(tidyverse)
 library(rioja)
@@ -80,6 +80,9 @@ bug.cal_high.res <- cal.lim %>%
 	left_join(taxa.otu, by = c('TaxaID_v2')) %>%
 	select(site.id, OTU_high.res, RA) %>%
 	filter(OTU_high.res != 666) 
+# sum RA's across all OTUs--should see a reduction in rows
+bug.cal_high.res<-plyr::ddply(.data = bug.cal_high.res, c('site.id', 'OTU_high.res'), 
+							  plyr::summarize, RA=sum(RA))
 
 
 bug.cal_high.res$RA.trans <- asin(sqrt(bug.cal_high.res$RA))
@@ -115,6 +118,11 @@ bug.val_high.res <- val.lim %>%
 	left_join(taxa.otu, by = c('TaxaID_v2')) %>%
 	select(site.id, OTU_high.res, RA) %>%
 	filter(OTU_high.res != 666) 
+
+# sum RA's across all OTUs--should see a reduction in rows
+bug.val_high.res<-plyr::ddply(.data = bug.val_high.res, c('site.id', 'OTU_high.res'), 
+										plyr::summarize, RA=sum(RA))
+
 
 bug.val_high.res$RA.trans <- asin(sqrt(bug.val_high.res$RA))
 
