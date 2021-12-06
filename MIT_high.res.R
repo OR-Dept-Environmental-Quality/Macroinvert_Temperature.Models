@@ -70,9 +70,9 @@ hist(cal.lim$RA)
 qqnorm(cal.lim$RA ,main="QQ plot of RA data",pch=19)
 qqline(cal.lim$RA)
 
-hist(asin(sqrt(cal.lim$RA)))
-qqnorm(asin(sqrt(cal.lim$RA)) ,main="QQ plot of RA data",pch=19)
-qqline(asin(sqrt(cal.lim$RA)))
+				hist(asin(sqrt(cal.lim$RA)))
+				qqnorm(asin(sqrt(cal.lim$RA)) ,main="QQ plot of RA data",pch=19)
+				qqline(asin(sqrt(cal.lim$RA)))
 
 
 
@@ -85,7 +85,7 @@ bug.cal_high.res<-plyr::ddply(.data = bug.cal_high.res, c('site.id', 'OTU_high.r
 							  plyr::summarize, RA=sum(RA))
 
 
-bug.cal_high.res$RA.trans <- asin(sqrt(bug.cal_high.res$RA))
+			bug.cal_high.res$RA.trans <- asin(sqrt(bug.cal_high.res$RA))
 
 # need to crosstab the bug data (turn into a wide format) so that OTUs are columns
 
@@ -217,9 +217,9 @@ plot(wa_high.res, resid=FALSE, xval=FALSE, tolDW=FALSE, deshrink="classical",
 	  add.smooth=TRUE)
 
 # plot residuals -- INVERSE shows BIAS, CLASSICAL doesn't
-plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="classical",
-	  xlab="", ylab="", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
-	  add.smooth=TRUE)
+plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="inverse",
+	  xlab="MWMT", ylab="residuals", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
+	  add.smooth=TRUE, main='Inverse deshrinking')
 
 				# high res---RA.trans
 				spec <- bug.cal_high_wide_RA.trans
@@ -306,7 +306,7 @@ p + geom_point()	+ geom_smooth(method="lm")
 								 
 # residuals ~ watershed area
 p <- ggplot(data=site.data_residuals, aes(x=wsarea_km2, y=WA.resid_high))
-p + geom_point()	+ geom_smooth(method="lm")	+ xlim(c(0, 10000))									 
+p + geom_point()	+ geom_smooth(method="lm")	+ xlim(c(0, 100000))									 
 			
 	@@@@ some very large watrersheds....????
 	
@@ -318,7 +318,7 @@ p + geom_point()	+ geom_smooth(method="lm")
 								 
 # residuals ~ IWI
 p <- ggplot(data=site.data_residuals, aes(x=IWI, y=WA.resid_high))
-p + geom_point()					
+p + geom_point()		+ geom_smooth(method="lm")				
 
 
 
