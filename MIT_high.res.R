@@ -232,7 +232,7 @@ plot(wa_high.res, resid=FALSE, xval=FALSE, tolDW=FALSE, deshrink="classical",
 # plot residuals -- INVERSE shows BIAS, CLASSICAL doesn't
 plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="classical",
 	  xlab="MWMT", ylab="residuals", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
-	  add.smooth=TRUE, main='Inverse deshrinking')
+	  add.smooth=TRUE, main='Classical deshrinking')
 
 				# high res---RA.trans
 				spec <- bug.cal_high_wide_RA.trans
@@ -343,5 +343,51 @@ p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 0, vjust=.5)
 								 
 								 
 							 
-								 
+#####
+
+# Segment Wise RMSEP
+
+####
+
+#Now a function to calculate and plot segment-wise RMSEP.
+
+
+segmentwise.rmse <- function(mod, ng = 10, k = 1, plot = TRUE, ...){
+	if(is.null(mod$residuals.cv)){
+		if(class(mod) == "MAT"){
+			r <- mod$fitted.values[,k]-mod$x
+			perf<-performance(mod)$object
+		}else{
+			stop("Need cross-validated model to calculate RMSEP")
+		}
+	}else{
+		r <- mod$residuals.cv[,k]
+		perf<-performance(mod)$crossval
+	}  
+	breaks <- seq(min(mod$x),max(mod$x), length=ng)
+	envcut <- cut(mod$x,breaks=breaks, include.lowest=TRUE)
+	segRMSEP <- tapply(r,envcut,function(x)sqrt(mean(x^2)))
+	allsegRMSEP <- sqrt(mean(segRMSEP^2))
+	
+	if(plot){
+		hist(mod$x, breaks=breaks, col="grey70", border=NA, ...)
+		par(new=T)
+		mid<-((c(breaks,NA)+c(NA,breaks))/2)
+		mid<-mid[!is.na(mid)]
+		plot(mid,segRMSEP, type="n", xlim=par()$usr[1:2],xaxs="i", yaxt="n", ylab="", xlab="", col=2)
+		lines(breaks,c(segRMSEP[1],segRMSEP), type="S", col=3)
+		axis(4)
+		mtext("RMSEP", side=4, line=1.5)
+		abline(h = perf[k,"RMSE"], col=2, lty=2)
+		abline(h = allsegRMSEP, col=4, lty=2) 
+	}
+	list(breaks = breaks, segRMSEP = segRMSEP, allsegRMSEP = allsegRMSEP)
+}
+
+# Now we can use this function.
+modWA<-crossval(WA(spec, env))
+modMAT<-MAT(spec,env)
+x11(4.5,4.5); par(mar=c(3,3,1,3), mgp=c(1.5, 0.5, 0))
+segmentwise.rmse(modWA, k=1, main="WA", xlab="MWMT")
+segmentwise.rmse(modMAT, k=5, main="MAT", xlab="pH")
 								 
