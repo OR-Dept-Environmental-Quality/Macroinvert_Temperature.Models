@@ -276,8 +276,7 @@ wa_high.res_VAL <- predict(wa_high.res, newdata=bug.val_high_wide, sse=TRUE, nbo
 									match.data=TRUE, verbose=TRUE)
 
 # get RMSE for VAL data
-wa_high.res_VAL$v2.boot # Inv = 2.285071, Cla = 2.717451 (1000 boots)
-								# [1] 2.282864 2.715980 (10,000 boots)
+wa_high.res_VAL$v2.boot 
 wa_high.res_VAL$fit
 			@@@@ whats the difference between fit and fit.boot?
 	
@@ -390,4 +389,46 @@ modMAT<-MAT(spec,env)
 x11(4.5,4.5); par(mar=c(3,3,1,3), mgp=c(1.5, 0.5, 0))
 segmentwise.rmse(modWA, k=1, main="WA", xlab="MWMT")
 segmentwise.rmse(modMAT, k=5, main="MAT", xlab="pH")
-								 
+
+
+####
+
+# Alternative statistical models for transfer functions
+
+####
+
+# need to convert env to vector, not dataframe
+env.num <- as.numeric(unlist(env))
+
+
+IKFA(y=spec, x=env.num, nFact = 5, IsPoly = FALSE, IsRot = TRUE,
+	  ccoef = 1:nFact, check.data=TRUE, lean=FALSE)
+		# results: 4 factors to get RMSE similar to WA.  R2 poor.  Max bias high.
+
+MAT(y=spec, x=env.num, dist.method="bray", k=5, lean=TRUE)
+		# results: RMSE similar to WA.  R2 equivalent at NO4.  Max bias equal to INV deshrinking.
+
+mrlc <- MLRC(y=spec, x=env.num, check.data=TRUE, lean=FALSE, n.cut=5, verbose=TRUE)
+		# results: RMSE similar to WA.  R2 similar.  Max bias lower than WA-cla (2.8)
+
+	summary(mrlc)
+	plot(mrlc, add.ref = TRUE, add.smooth = TRUE) # no bias at extremes
+	crossval(mrlc, cv.method="lgo", verbose=TRUE, ngroups=10,
+				nboot=100, h.cutoff=0, h.dist=NULL)
+
+mr <- MR(y=spec, x=env.num, check.data=TRUE, lean=FALSE)
+		# RMSE a fair bit lower.  R2 a bit higher.  But max bias = WA.inv
+	summary(mr)
+	plot(mr, add.ref = TRUE, add.smooth = TRUE) # bias at extremes
+
+
+wapls <-	WAPLS(y=spec, x=env.num, npls=5, iswapls=TRUE, standx=FALSE, lean=FALSE,
+			check.data=TRUE)
+		# results: RMSE improves with 3 or more, R2 improves a bit.  Max bias = WA.inv
+		summary(wapls)
+		plot(wapls, add.ref = TRUE, add.smooth = TRUE) # bias at extremes
+		crossval(wapls, cv.method="lgo", verbose=TRUE, ngroups=10,
+					nboot=100, h.cutoff=0, h.dist=NULL)
+
+
+
