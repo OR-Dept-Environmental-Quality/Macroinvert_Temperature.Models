@@ -57,8 +57,7 @@ val <- read.csv('VAL_629_JS.csv')  # independent validation data set, used to ge
 #####
 #####
 
-#		join bugs and OTUs, create multiple bug files for each OTU resolution level
-
+#		join bugs and OTUs
 #####
 #####
 
@@ -152,6 +151,7 @@ bug.val_high_wide <-	column_to_rownames(bug.val_high_wide, 'site.id')
 #####
 #####
 
+# cal
 env.cal <- cal %>%
 	select(UniqueID_v2, MWMT_final) %>%
 	rename(site.id = UniqueID_v2) %>%
@@ -165,6 +165,19 @@ hist(env.cal$MWMT_final)
 qqnorm(env.cal$MWMT_final ,main="QQ plot of MWMT data",pch=19)
 qqline(env.cal$MWMT_final)
 
+# val
+env.val <- val %>%
+	select(UniqueID_v2, MWMT_final) %>%
+	rename(site.id = UniqueID_v2) %>%
+	distinct_all()
+
+
+env.val <-	column_to_rownames(env.cal, 'site.id')
+
+
+hist(env.val$MWMT_final)
+qqnorm(env.val$MWMT_final ,main="QQ plot of MWMT data",pch=19)
+qqline(env.val$MWMT_final)
 
 
 #####
@@ -184,8 +197,8 @@ wa_high.res <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.
 							check.data=TRUE, lean=FALSE)
 
 		# look at WA-PLS
-		wa.pls_high.res <- WAPLS(y=spec, x=env, npls=5, iswapls=TRUE, standx=FALSE, lean=FALSE,
-		check.data=TRUE)
+		# wa.pls_high.res <- WAPLS(y=spec, x=env, npls=5, iswapls=TRUE, standx=FALSE, lean=FALSE,
+		# check.data=TRUE)
 		# minimal to no improvements
 		
 		
@@ -193,7 +206,7 @@ wa_high.res <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.
 wa_high.res # 342 taxa, RMSE (inv/cla) = 2.2/2.7, r2 = 0.687 (both), max bias 6.4/3.7
 
 crossval(wa_high.res, cv.method="loo", verbose=TRUE, ngroups=10,
-			nboot=100, h.cutoff=0, h.dist=NULL)
+			nboot=1000, h.cutoff=0, h.dist=NULL)
 		# crossval results almost exactly the same as original
 
 
@@ -217,7 +230,7 @@ plot(wa_high.res, resid=FALSE, xval=FALSE, tolDW=FALSE, deshrink="classical",
 	  add.smooth=TRUE)
 
 # plot residuals -- INVERSE shows BIAS, CLASSICAL doesn't
-plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="inverse",
+plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="classical",
 	  xlab="MWMT", ylab="residuals", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
 	  add.smooth=TRUE, main='Inverse deshrinking')
 
@@ -225,7 +238,7 @@ plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="inverse",
 				spec <- bug.cal_high_wide_RA.trans
 				env <- env.cal
 				
-				wa_high.res_RA.trans <- WA(y=spec, x=env, mono=FALSE, tolDW = FALSE, use.N2=TRUE, tol.cut=.01, 
+				wa_high.res_RA.trans <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.01, 
 										check.data=TRUE, lean=FALSE)
 				
 				wa_high.res_RA.trans # 342 taxa, RMSE (inv/cla) = 2.2/2.7, r2 = 0.687 (both), max bias 6.4/3.7
@@ -269,7 +282,8 @@ wa_high.res_VAL$fit
 			@@@@ whats the difference between fit and fit.boot?
 	
 
-				
+@@@@@ how is this giving the RMSE for VAL?  You need ENV and Inferences to calculate that...'predict' above
+@@@@@ doesnt include ENV....????
 				
 # join MWMT and Inferred values, plus site specific data
 
