@@ -157,7 +157,15 @@ env.cal <- cal %>%
 	rename(site.id = UniqueID_v2) %>%
 	distinct_all()
 
-
+			
+			# is ther emodel improvement if we drop low and high temp sites--low 'n' and creates high model errors?
+			env.cal_10.25 <- env.cal %>%
+				filter(MWMT_final > 9.99 & MWMT_final < 25.01)
+			bug.cal_high_wide_10.25 <- left_join(rownames_to_column(env.cal_10.25), rownames_to_column(bug.cal_high_wide), by=c("rowname"))
+			rownames(bug.cal_high_wide_10.25) <- bug.cal_high_wide_10.25$rowname
+			bug.cal_high_wide_10.25 <- bug.cal_high_wide_10.25 %>%
+				select(-c(rowname, MWMT_final))
+			
 env.cal <-	column_to_rownames(env.cal, 'site.id')
 
 
@@ -191,7 +199,9 @@ qqline(env.val$MWMT_final)
 
 # high res
 spec <- bug.cal_high_wide
+	spec_10.25 <- bug.cal_high_wide_10.25
 env <- env.cal
+	env_10.25 <- env.cal_10.25
 
 wa_high.res <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.01, 
 							check.data=TRUE, lean=FALSE)
@@ -205,7 +215,7 @@ wa_high.res <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.
 
 wa_high.res # 342 taxa, RMSE (inv/cla) = 2.2/2.7, r2 = 0.687 (both), max bias 6.4/3.7
 
-crossval(wa_high.res, cv.method="loo", verbose=TRUE, ngroups=10,
+crossval(wa_high.res, cv.method="lgo", verbose=TRUE, ngroups=10,
 			nboot=1000, h.cutoff=0, h.dist=NULL)
 		# crossval results almost exactly the same as original
 
@@ -226,8 +236,8 @@ WA.resid.high <- WA.resid.high %>%
 
 # plot inferred vs MWMT
 plot(wa_high.res, resid=FALSE, xval=FALSE, tolDW=FALSE, deshrink="classical",
-	  xlab="", ylab="", ylim=c(0,40), xlim=c(0,40), add.ref=TRUE,
-	  add.smooth=TRUE)
+	  xlab="MWMT Observed", ylab="Inferred", main="Classical deshrinking", ylim=c(0,40), xlim=c(0,40), 
+	  add.ref=TRUE, add.smooth=TRUE)
 
 # plot residuals -- INVERSE shows BIAS, CLASSICAL doesn't
 plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="classical",
@@ -314,7 +324,7 @@ row.names(VAL.rmsep) <- NULL
 					
 # join MWMT and Inferred values, plus site specific data
 
-site.data <- read.csv('SiteData_wCollDate_20220106.csv')
+site.data <- read.csv('SiteData_20220125.csv')
 
 
 
@@ -386,7 +396,7 @@ library("factoextra")
 library("corrplot")
 
 
-pca.allsites <- PCA(site.data_pca[,c(4,8, 11:17)], graph = FALSE)
+pca.allsites <- PCA(site.data_pca[,c(5:7, 10:16)], graph = FALSE)
 
 summary(pca.allsites)
 str(pca.allsites)
@@ -528,7 +538,7 @@ p + geom_point()		+ geom_smooth(method="lm")
 
 
 
-# residuals ~ eocregions
+# residuals ~ ecocregions
 p <- ggplot(data=site.data_residuals, aes(x=eco3, y=WA.resid_high))								 
 p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 0, vjust=.5))+
 	geom_hline(yintercept=0, linetype="dashed", color = "red") 
@@ -537,8 +547,22 @@ p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 0, vjust=.5)
 p <- ggplot(data=site.data_residuals, aes(x=as.factor(Year), y=WA.resid_high))								 
 p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 0, vjust=.5))+
 	geom_hline(yintercept=0, linetype="dashed", color = "red") 
+		
+		p + geom_point()		+ geom_smooth(method="lm")				
 
-							 
+# residuals ~ Collection Method
+p <- ggplot(data=site.data_residuals, aes(x=as.factor(Method_SLH), y=WA.resid_high))								 
+p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 0, vjust=.5))+
+	geom_hline(yintercept=0, linetype="dashed", color = "red") 
+
+
+# residuals ~ Collection Method
+p <- ggplot(data=site.data_residuals, aes(x=as.factor(SourceEntity), y=WA.resid_high))								 
+p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 90, vjust=.5))+
+	geom_hline(yintercept=0, linetype="dashed", color = "red") 
+
+
+
 #####
 
 # Segment Wise RMSEP
