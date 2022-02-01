@@ -17,6 +17,18 @@ library(rioja)
 
 #####
 #####
+#				MASTER SAMPLE Lookup
+#####
+#####
+
+site.data <- read.csv('SiteData_20220125.csv')
+	# join to bug data files to eliminate boat samples + 1 May sample
+
+use <- site.data[site.data$use.final=='Y', 1]
+
+
+#####
+#####
 #			bring in taxonomy lookup table -- with OTUs for different models
 #####
 #####
@@ -46,12 +58,22 @@ taxa.otu <- taxa %>%
 #####
 #####
 
-cal <- read.csv('CAL_3875_JS.csv') # calibration data set, used to build the models (n = 3875)
+cal <- read.csv('CAL_3875_JS.csv') # calibration data set, used to build the models (starting 'n' = 3875)
 val <- read.csv('VAL_629_JS.csv')  # independent validation data set, used to get better error 
-										  # estimates of model performance (n = 629)
+										  # estimates of model performance (starting 'n' = 629)
 
 
 	# 'TaxaID_v2' = taxa ID, link this to OTU level for the appropriate model
+
+
+# limit CAL and VAL to "use" = "Y" in site.data (remove boatable samples and 1 May sample = remove 99 total)
+
+
+cal <-cal %>%
+	dplyr::filter(UniqueID_v2 %in% use)
+
+val <- val %>%
+	dplyr::filter(UniqueID_v2 %in% use)
 
 
 #####
@@ -65,13 +87,13 @@ cal.lim <- cal %>%
 	select(UniqueID_v2, TaxaID_v2, RA) %>%
 	rename(site.id = UniqueID_v2)
 
-hist(cal.lim$RA)
-qqnorm(cal.lim$RA ,main="QQ plot of RA data",pch=19)
-qqline(cal.lim$RA)
+				# hist(cal.lim$RA)
+				# qqnorm(cal.lim$RA ,main="QQ plot of RA data",pch=19)
+				# qqline(cal.lim$RA)
 
-				hist(asin(sqrt(cal.lim$RA)))
-				qqnorm(asin(sqrt(cal.lim$RA)) ,main="QQ plot of RA data",pch=19)
-				qqline(asin(sqrt(cal.lim$RA)))
+				# hist(asin(sqrt(cal.lim$RA)))
+				# qqnorm(asin(sqrt(cal.lim$RA)) ,main="QQ plot of RA data",pch=19)
+				# qqline(asin(sqrt(cal.lim$RA)))
 
 
 
@@ -84,7 +106,7 @@ bug.cal_high.res<-plyr::ddply(.data = bug.cal_high.res, c('site.id', 'OTU_high.r
 							  plyr::summarize, RA=sum(RA))
 
 
-			bug.cal_high.res$RA.trans <- asin(sqrt(bug.cal_high.res$RA))
+					#bug.cal_high.res$RA.trans <- asin(sqrt(bug.cal_high.res$RA))
 
 # need to crosstab the bug data (turn into a wide format) so that OTUs are columns
 
@@ -96,12 +118,12 @@ bug.cal_high_wide[is.na(bug.cal_high_wide)] <- 0
 bug.cal_high_wide <-	column_to_rownames(bug.cal_high_wide, 'site.id')
 
 
-	# create a wide dataset for RA.trans
-	bug.cal_high_wide_RA.trans <- bug.cal_high.res %>% 
-		pivot_wider(id_cols = site.id, names_from = OTU_high.res, values_from = RA.trans,
-						values_fn = sum) 
-	bug.cal_high_wide_RA.trans[is.na(bug.cal_high_wide_RA.trans)] <- 0
-	bug.cal_high_wide_RA.trans <-	column_to_rownames(bug.cal_high_wide_RA.trans, 'site.id')
+								# # create a wide dataset for RA.trans
+								# bug.cal_high_wide_RA.trans <- bug.cal_high.res %>% 
+								# 	pivot_wider(id_cols = site.id, names_from = OTU_high.res, values_from = RA.trans,
+								# 					values_fn = sum) 
+								# bug.cal_high_wide_RA.trans[is.na(bug.cal_high_wide_RA.trans)] <- 0
+								# bug.cal_high_wide_RA.trans <-	column_to_rownames(bug.cal_high_wide_RA.trans, 'site.id')
 
 
 
@@ -123,7 +145,7 @@ bug.val_high.res<-plyr::ddply(.data = bug.val_high.res, c('site.id', 'OTU_high.r
 										plyr::summarize, RA=sum(RA))
 
 
-bug.val_high.res$RA.trans <- asin(sqrt(bug.val_high.res$RA))
+						# bug.val_high.res$RA.trans <- asin(sqrt(bug.val_high.res$RA))
 
 
 # need to crosstab the bug data (turn into a wide format) so that OTUs are columns
@@ -135,12 +157,12 @@ bug.val_high_wide <- bug.val_high.res %>%
 bug.val_high_wide[is.na(bug.val_high_wide)] <- 0
 bug.val_high_wide <-	column_to_rownames(bug.val_high_wide, 'site.id')
 
-			# create a data set for transformed RA
-			bug.val_high_wide_RA.trans <- bug.val_high.res %>% 
-				pivot_wider(id_cols = site.id, names_from = OTU_high.res, values_from = RA.trans,
-								values_fn = sum) 
-			bug.val_high_wide_RA.trans[is.na(bug.val_high_wide_RA.trans)] <- 0
-			bug.val_high_wide_RA.trans <-	column_to_rownames(bug.val_high_wide_RA.trans, 'site.id')
+							# # create a data set for transformed RA
+							# bug.val_high_wide_RA.trans <- bug.val_high.res %>% 
+							# 	pivot_wider(id_cols = site.id, names_from = OTU_high.res, values_from = RA.trans,
+							# 					values_fn = sum) 
+							# bug.val_high_wide_RA.trans[is.na(bug.val_high_wide_RA.trans)] <- 0
+							# bug.val_high_wide_RA.trans <-	column_to_rownames(bug.val_high_wide_RA.trans, 'site.id')
 
 
 #####
@@ -158,20 +180,20 @@ env.cal <- cal %>%
 	distinct_all()
 
 			
-			# is ther emodel improvement if we drop low and high temp sites--low 'n' and creates high model errors?
-			env.cal_10.25 <- env.cal %>%
-				filter(MWMT_final > 9.99 & MWMT_final < 25.01)
-			bug.cal_high_wide_10.25 <- left_join(rownames_to_column(env.cal_10.25), rownames_to_column(bug.cal_high_wide), by=c("rowname"))
-			rownames(bug.cal_high_wide_10.25) <- bug.cal_high_wide_10.25$rowname
-			bug.cal_high_wide_10.25 <- bug.cal_high_wide_10.25 %>%
-				select(-c(rowname, MWMT_final))
-			
+							# # is there model improvement if we drop low and high temp sites--low 'n' and creates high model errors?
+							# env.cal_10.25 <- env.cal %>%
+							# 	filter(MWMT_final > 9.99 & MWMT_final < 25.01)
+							# bug.cal_high_wide_10.25 <- left_join(rownames_to_column(env.cal_10.25), rownames_to_column(bug.cal_high_wide), by=c("rowname"))
+							# rownames(bug.cal_high_wide_10.25) <- bug.cal_high_wide_10.25$rowname
+							# bug.cal_high_wide_10.25 <- bug.cal_high_wide_10.25 %>%
+							# 	select(-c(rowname, MWMT_final))
+							
 env.cal <-	column_to_rownames(env.cal, 'site.id')
 
 
-hist(env.cal$MWMT_final)
-qqnorm(env.cal$MWMT_final ,main="QQ plot of MWMT data",pch=19)
-qqline(env.cal$MWMT_final)
+							# hist(env.cal$MWMT_final)
+							# qqnorm(env.cal$MWMT_final ,main="QQ plot of MWMT data",pch=19)
+							# qqline(env.cal$MWMT_final)
 
 # val
 env.val <- val %>%
@@ -183,10 +205,10 @@ env.val <- val %>%
 env.val <-	column_to_rownames(env.val, 'site.id')
 
 
-hist(env.val$MWMT_final)
-qqnorm(env.val$MWMT_final ,main="QQ plot of MWMT data",pch=19)
-qqline(env.val$MWMT_final)
-
+							# hist(env.val$MWMT_final)
+							# qqnorm(env.val$MWMT_final ,main="QQ plot of MWMT data",pch=19)
+							# qqline(env.val$MWMT_final)
+							# 
 
 #####
 #####
@@ -199,9 +221,9 @@ qqline(env.val$MWMT_final)
 
 # high res
 spec <- bug.cal_high_wide
-	spec_10.25 <- bug.cal_high_wide_10.25
-env <- env.cal
-	env_10.25 <- env.cal_10.25
+env <- env.cal							
+							# spec_10.25 <- bug.cal_high_wide_10.25
+							# env_10.25 <- env.cal_10.25
 
 wa_high.res <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.01, 
 							check.data=TRUE, lean=FALSE)
@@ -214,8 +236,9 @@ wa_high.res <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.
 		
 
 wa_high.res # 342 taxa, RMSE (inv/cla) = 2.2/2.7, r2 = 0.687 (both), max bias 6.4/3.7
+				# tol.dw: RMSE = 2.2/2.6, r2 = 0.70, max bias = 6.3/3.6
 
-crossval(wa_high.res, cv.method="lgo", verbose=TRUE, ngroups=10,
+crossval(wa_high.res, cv.method="bootstrap", verbose=TRUE, ngroups=10,
 			nboot=1000, h.cutoff=0, h.dist=NULL)
 		# crossval results almost exactly the same as original
 
@@ -223,63 +246,63 @@ crossval(wa_high.res, cv.method="lgo", verbose=TRUE, ngroups=10,
 
 performance(wa_high.res)
 
-names(wa_high.res)
-wa_high.res$fitted.values
-wa_high.res$coefficients
+							# names(wa_high.res)
+							# wa_high.res$fitted.values
+							# wa_high.res$coefficients
 
 WA.resid_high <- residuals(wa_high.res)	
-hist(WA.resid_high[,2])
+							# hist(WA.resid_high[,2])
 WA.resid_high <- (WA.resid_high[,2])
 WA.resid.high <- as.data.frame(WA.resid_high)
-WA.resid.high <- WA.resid.high %>%
-	mutate(sample.id = rownames(WA.resid.high))
+				# WA.resid.high <- WA.resid.high %>%
+				# 	mutate(sample.id = rownames(WA.resid.high))
 
 # plot inferred vs MWMT
-plot(wa_high.res, resid=FALSE, xval=FALSE, tolDW=FALSE, deshrink="classical",
-	  xlab="MWMT Observed", ylab="Inferred", main="Classical deshrinking", ylim=c(0,40), xlim=c(0,40), 
-	  add.ref=TRUE, add.smooth=TRUE)
+plot(wa_high.res, resid=FALSE, xval=FALSE, tolDW=TRUE, deshrink="classical",
+	  xlab="MWMT", ylab="MTSI (inferred MWMT)", main="Classical deshrinking: tolerance downweighted", 
+	  ylim=c(0,40), xlim=c(0,40), add.ref=TRUE, add.smooth=TRUE)
 
 # plot residuals -- INVERSE shows BIAS, CLASSICAL doesn't
-plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="classical",
-	  xlab="MWMT", ylab="residuals", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
-	  add.smooth=TRUE, main='Classical deshrinking')
+plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=TRUE, deshrink="classical",
+	  xlab="MWMT", ylab="residuals (MTSI)", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
+	  add.smooth=TRUE, main='Classical deshrinking: tolerance downweighted')
 
-				# high res---RA.trans
-				spec <- bug.cal_high_wide_RA.trans
-				env <- env.cal
-				
-				wa_high.res_RA.trans <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.01, 
-										check.data=TRUE, lean=FALSE)
-				
-				wa_high.res_RA.trans # 342 taxa, RMSE (inv/cla) = 2.2/2.7, r2 = 0.687 (both), max bias 6.4/3.7
-				
-				crossval(wa_high.res_RA.trans, cv.method="loo", verbose=TRUE, ngroups=10,
-							nboot=100, h.cutoff=0, h.dist=NULL)
+				# # high res---RA.trans
+				# spec <- bug.cal_high_wide_RA.trans
+				# env <- env.cal
+				# 
+				# wa_high.res_RA.trans <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.01, 
+				# 						check.data=TRUE, lean=FALSE)
+				# 
+				# wa_high.res_RA.trans # 342 taxa, RMSE (inv/cla) = 2.2/2.7, r2 = 0.687 (both), max bias 6.4/3.7
+				# 
+				# crossval(wa_high.res_RA.trans, cv.method="loo", verbose=TRUE, ngroups=10,
+				# 			nboot=100, h.cutoff=0, h.dist=NULL)
 				# crossval results almost exactly the same as original
 				
 				
 				
-				performance(wa_high.res_RA.trans) # RMSE 2.1/2.5, r2 0.73/0.73, max bias 6.4/4.0
-				
-				names(wa_high.res_RA.trans)
-				wa_high.res$fitted.values_RA.trans
-				wa_high.res$coefficients_RA.trans
-				wa_high.res$cv.summary_RA.trans
-				
-				
-				predict(wa_high.res_RA.trans, newdata=bug.val_high_wide_RA.trans, sse=FALSE, nboot=100,
-						  match.data=TRUE, verbose=TRUE)
-				
-				# plot inferred vs MWMT
-				plot(wa_high.res_RA.trans, resid=FALSE, xval=FALSE, tolDW=FALSE, deshrink="classical",
-					  xlab="MWMT", ylab="Inferred temp (MWMT)", ylim=c(0,40), xlim=c(0,40), add.ref=TRUE,
-					  add.smooth=TRUE)
-				
-				# plot residuals -- INVERSE shows BIAS, CLASSICAL doesn't
-				plot(wa_high.res_RA.trans, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="classical",
-					  xlab="MWMT", ylab="residuals", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
-					  add.smooth=TRUE)
-######
+# 				performance(wa_high.res_RA.trans) # RMSE 2.1/2.5, r2 0.73/0.73, max bias 6.4/4.0
+# 				
+# 				names(wa_high.res_RA.trans)
+# 				wa_high.res$fitted.values_RA.trans
+# 				wa_high.res$coefficients_RA.trans
+# 				wa_high.res$cv.summary_RA.trans
+# 				
+# 				
+# 				predict(wa_high.res_RA.trans, newdata=bug.val_high_wide_RA.trans, sse=FALSE, nboot=100,
+# 						  match.data=TRUE, verbose=TRUE)
+# 				
+# 				# plot inferred vs MWMT
+# 				plot(wa_high.res_RA.trans, resid=FALSE, xval=FALSE, tolDW=FALSE, deshrink="classical",
+# 					  xlab="MWMT", ylab="Inferred temp (MWMT)", ylim=c(0,40), xlim=c(0,40), add.ref=TRUE,
+# 					  add.smooth=TRUE)
+# 				
+# 				# plot residuals -- INVERSE shows BIAS, CLASSICAL doesn't
+# 				plot(wa_high.res_RA.trans, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="classical",
+# 					  xlab="MWMT", ylab="residuals", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
+# 					  add.smooth=TRUE)
+# ######
 				
 # make predictions for VAL dataset				
 				
@@ -329,7 +352,9 @@ site.data <- read.csv('SiteData_20220125.csv')
 
 
 site.data <- site.data %>%
-				rename('sample.id' = 'UniqueID_v2')
+				rename('sample.id' = 'UniqueID_v2') %>%
+				filter(use.final == 'Y') # drop boat and may sample ( n = 99)
+
 			
 
 
@@ -348,15 +373,16 @@ site.data_num.long <- site.data_num %>%
 
 sum.stats <- site.data_num.long %>%                               # Summary by group using dplyr
 					group_by(calval, variable) %>% 
-					summarize(min = min(value),
+					summarize(min = min(value, na.rm = TRUE),
 								 q1 = quantile(value, 0.25, na.rm=TRUE),
 								 median = median(value, na.rm=TRUE),
 								 mean = mean(value, na.rm=TRUE),
 								 q3 = quantile(value, 0.75, na.rm=TRUE),
 								 max = max(value, na.rm=TRUE))
 
-@@@@ mostly works--why is MIN not working?
 
+	
+write.csv(sum.stats, 'sum.stats.csv')
 	
 # boxplots
 	site.data_num.long %>% 
@@ -382,8 +408,8 @@ site.data_pca <- site.data[complete.cases(site.data), ]
 								#site.data_complete <- site.data_complete %>% select(!PctForWs) # highly correlated with 'PctForCat'
 
 				# data transformations   ????
-				slope, elev = sqrt
-				wsarea = log10
+				# slope, elev = sqrt
+				# wsarea = log10
 
 
 								#rownames(site.data_complete) <- site.data_complete[,1]
@@ -399,8 +425,8 @@ library("corrplot")
 pca.allsites <- PCA(site.data_pca[,c(5:7, 10:16)], graph = FALSE)
 
 summary(pca.allsites)
-str(pca.allsites)
-print(pca.allsites)
+				# str(pca.allsites)
+				# print(pca.allsites)
 eig.val <- get_eigenvalue(pca.allsites) # Extract the eigenvalues/variances of principal components
 fviz_eig(pca.allsites, addlabels = TRUE, ylim = c(0, 50) ) # Visualize the eigenvalues
 
@@ -485,8 +511,13 @@ fviz_pca_ind(pca.allsites,
 			@@@@ do we need to look at VAL as well?
 ######
 
+WA.resid.high_2 <- WA.resid.high %>%
+ 	mutate(sample.id = rownames(WA.resid.high)) # get site ID as a column for join
+
+
+
 site.data_residuals <- site.data %>%
-							 inner_join(WA.resid.high, by = c('sample.id'))
+							 inner_join(WA.resid.high_2, by = c('sample.id'))
 
 
 										# site.data_residuals$eco3 <- plyr::revalue(site.data_residuals$eco3, c("Blue Mountains" = "B.Mts",                                   
@@ -556,7 +587,7 @@ p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 0, vjust=.5)
 	geom_hline(yintercept=0, linetype="dashed", color = "red") 
 
 
-# residuals ~ Collection Method
+# residuals ~ Source
 p <- ggplot(data=site.data_residuals, aes(x=as.factor(SourceEntity), y=WA.resid_high))								 
 p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 90, vjust=.5))+
 	geom_hline(yintercept=0, linetype="dashed", color = "red") 
