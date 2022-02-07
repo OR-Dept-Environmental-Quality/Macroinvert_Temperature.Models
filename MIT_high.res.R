@@ -596,14 +596,18 @@ p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 90, vjust=.5
 
 #####
 
-# Segment Wise RMSEP
+# Segment Wise RMSEP: https://quantpalaeo.wordpress.com/2014/06/10/uneven-sampling-of-the-gradient-and-segment-wise-rmsep/
+
+			# k sets the column of the model output to use. For example, with WA, the first column 
+			# is for the inverse deshrinking model, and the second for the classical deshrinking model. 
+			# Run performance(mod) to see which model is in which column. 
 
 ####
 
 #Now a function to calculate and plot segment-wise RMSEP.
 
 
-segmentwise.rmse <- function(mod, ng = 10, k = 1, plot = TRUE, ...){
+segmentwise.rmse <- function(mod, ng = 10, k = 5, plot = TRUE, ...){ 
 	if(is.null(mod$residuals.cv)){
 		if(class(mod) == "MAT"){
 			r <- mod$fitted.values[,k]-mod$x
@@ -636,11 +640,26 @@ segmentwise.rmse <- function(mod, ng = 10, k = 1, plot = TRUE, ...){
 }
 
 # Now we can use this function.
-modWA<-crossval(WA(spec, env))
-modMAT<-MAT(spec,env)
+#modWA<-crossval(WA(spec, env))
+modWA <- crossval(wa_high.res, cv.method="bootstrap", verbose=TRUE, ngroups=10,
+			nboot=1000, h.cutoff=0, h.dist=NULL)
+
+
 x11(4.5,4.5); par(mar=c(3,3,1,3), mgp=c(1.5, 0.5, 0))
-segmentwise.rmse(modWA, k=1, main="WA", xlab="MWMT")
-segmentwise.rmse(modMAT, k=5, main="MAT", xlab="pH")
+segmentwise.rmse(modWA, k=5, main="WA.cla.tol", xlab="MWMT")   # k = model type, 5 = classical, tol down-weighted
+
+
+
+palaeoSig
+
+
+
+
+
+
+
+
+
 
 
 ####
@@ -651,16 +670,16 @@ segmentwise.rmse(modMAT, k=5, main="MAT", xlab="pH")
 
 # need to convert env to vector, not dataframe
 
+env.vector <- env.cal$MWMT_final
 
-
-IKFA(y=spec, x=env.cal, nFact = 5, IsPoly = FALSE, IsRot = TRUE,
+IKFA(y=spec, x=env.vector, nFact = 5, IsPoly = FALSE, IsRot = TRUE,
 	  ccoef = 1:nFact, check.data=TRUE, lean=FALSE)
 		# results: 4 factors to get RMSE similar to WA.  R2 poor.  Max bias high.
 
-MAT(y=spec, x=env.cal, dist.method="bray", k=5, lean=TRUE)
+MAT(y=spec, x=env.vector, dist.method="bray", k=5, lean=TRUE)
 		# results: RMSE similar to WA.  R2 equivalent at NO4.  Max bias equal to INV deshrinking.
 
-mrlc <- MLRC(y=spec, x=env.cal, check.data=TRUE, lean=FALSE, n.cut=5, verbose=TRUE)
+mrlc <- MLRC(y=spec, x=env.vector, check.data=TRUE, lean=FALSE, n.cut=5, verbose=TRUE)
 		# results: RMSE similar to WA.  R2 similar.  Max bias lower than WA-cla (2.8)
 
 	summary(mrlc)
@@ -668,7 +687,7 @@ mrlc <- MLRC(y=spec, x=env.cal, check.data=TRUE, lean=FALSE, n.cut=5, verbose=TR
 	crossval(mrlc, cv.method="lgo", verbose=TRUE, ngroups=10,
 				nboot=100, h.cutoff=0, h.dist=NULL)
 
-mr <- MR(y=spec, x=env.cal, check.data=TRUE, lean=FALSE)
+mr <- MR(y=spec, x=env.vector, check.data=TRUE, lean=FALSE)
 		# RMSE a fair bit lower.  R2 a bit higher.  But max bias = WA.inv
 	summary(mr)
 	plot(mr, add.ref = TRUE, add.smooth = TRUE) # bias at extremes
