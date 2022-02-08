@@ -407,7 +407,31 @@ site.data_pca <- site.data[complete.cases(site.data), ]
 		# missing data blows up the PCA -- remove rows with missing data
 								#site.data_complete <- site.data_complete %>% select(!PctForWs) # highly correlated with 'PctForCat'
 
-				# data transformations   ????
+# data transformations
+								#colnames(site.data_pca)
+
+								source("transform.variables[2_asinsqrt].r")
+								transform.view2(site.data_pca)
+									# MWMT = none
+									# Year = none
+									# Daynum = none
+									# lat = none
+									# long = none
+									# slope = log10 +1
+									# ws.area = log 10
+									# elev = sqrt
+									# iwi = nothing makes better
+									# pctforestcat = asain(sqrt)
+
+site.data_pca.trans <- site.data_pca %>%
+	#select(sample.id, CollDate, siteid, calval, MWMT_final, Year, daynum, Ecoregion_name, 
+	#		 eco3, lat, long) %>%
+	mutate(slope.log = log10(slope_nhd + 1)) %>%
+	mutate(wsarea.log = log10(wsarea_km2))   %>%
+	mutate(elev.sqrt = sqrt(elev_m)) %>%
+	mutate(forest.asin = asin(sqrt(PctForCat/100)))
+	
+
 				# slope, elev = sqrt
 				# wsarea = log10
 
@@ -422,7 +446,7 @@ library("factoextra")
 library("corrplot")
 
 
-pca.allsites <- PCA(site.data_pca[,c(5:7, 10:16)], graph = FALSE)
+pca.allsites <- PCA(site.data_pca.trans[,c(5:7, 10:11, 15,23:26)], graph = FALSE, scale.unit = TRUE)
 
 summary(pca.allsites)
 				# str(pca.allsites)
