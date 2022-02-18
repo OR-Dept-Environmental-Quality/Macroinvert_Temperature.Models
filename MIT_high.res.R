@@ -8,45 +8,52 @@
 #			  derived from NorWeSTs MWMT metric.
 
 #				HIGH taxonomic resolution models
+#				Check model performance
+#				Look for bias
 
  
 # packages used
 library(tidyverse)
 library(rioja)
+library(RODBC) 
+
+
+
+
+
+
 
 
 #####
 #####
-#				MASTER SAMPLE Lookup
+#				SITE level data, for each SAMPLE
 #####
 #####
 
-site.data <- read.csv('SiteData_20220125.csv')
-	# join to bug data files to eliminate boat samples + 1 May sample
+site.data <- read.csv('_SiteData_forShannon_20220213.csv')
 
-use <- site.data[site.data$use.final=='Y', 1]
+site.data <- site.data[order(site.data$UniqueID_v2),]	
 
 
 #####
 #####
-#			bring in taxonomy lookup table -- with OTUs for different models
+#			bring in taxonomy lookup table 
 #####
 #####
 
-taxa <- read.csv('OTU_final_894.csv')
 	
-	# OTU = taxa translator to bug data files
-	# OTU_high.res = highest taxonomic resolution (genus/species as much as possible)
-	# OTU_med.res = medium taxa resolution--compromises for groups where majority of info is at the next level up from 'high.res'
-	# OTU_low.res = lowest taxa resolution--many groups moved to tribe/subfamily/family/order (mostly midges, oligochaetes, etc.)
+	
+taxa <- read.csv('_OTU_worksheet_20220216.csv')
 
+	# OTU_high.res = highest taxonomic resolution (genus/species as much as possible)
+	
 	# '666' = used to filter out and drop taxa not included in model,
 
 # modify to make easier to join/link with bug data files
 taxa.otu <- taxa %>%
-	select(OTU, OTU_high.res, OTU_med.res, OTU_low.res) %>%
-	rename(TaxaID_v2 = OTU) # rename OTU to match taxa ID column in bug data files
-
+	select(Bio_ALL_TaxaID_v2, MTTI_OTU_highres_v2) %>%
+	rename(TaxaID_v2 = Bio_ALL_TaxaID_v2) %>% # rename OTU to match taxa ID column in bug data files
+	rename(OTU_high.res = MTTI_OTU_highres_v2) # renames MTTI_OTU.... to simplify
 
 
 
@@ -58,22 +65,20 @@ taxa.otu <- taxa %>%
 #####
 #####
 
-cal <- read.csv('CAL_3875_JS.csv') # calibration data set, used to build the models (starting 'n' = 3875)
-val <- read.csv('VAL_629_JS.csv')  # independent validation data set, used to get better error 
-										  # estimates of model performance (starting 'n' = 629)
+bugs_7977 <- read.csv('_Bio_ALL_7977.csv') # non-wadeable sites removed
+
+#Split into CAL and VAL datasets
+cal <- bugs_7977 %>%
+	filter(dataset == 'CAL') # calibration data set, used to build the models (starting 'n' = 3658)
 
 
-	# 'TaxaID_v2' = taxa ID, link this to OTU level for the appropriate model
+
+val <- bugs_7977 %>%
+	filter(dataset == 'VAL') # independent validation data set, used to get better error 
+									 # estimates of model performance (starting 'n' = 603)
 
 
-# limit CAL and VAL to "use" = "Y" in site.data (remove boatable samples and 1 May sample = remove 99 total)
-
-
-cal <-cal %>%
-	dplyr::filter(UniqueID_v2 %in% use)
-
-val <- val %>%
-	dplyr::filter(UniqueID_v2 %in% use)
+	
 
 
 #####
@@ -85,46 +90,47 @@ val <- val %>%
 
 cal.lim <- cal %>%
 	select(UniqueID_v2, TaxaID_v2, RA) %>%
-	rename(site.id = UniqueID_v2)
+	rename(sample.id = UniqueID_v2)
 
 				# hist(cal.lim$RA)
 				# qqnorm(cal.lim$RA ,main="QQ plot of RA data",pch=19)
 				# qqline(cal.lim$RA)
 
-				# hist(asin(sqrt(cal.lim$RA)))
-				# qqnorm(asin(sqrt(cal.lim$RA)) ,main="QQ plot of RA data",pch=19)
-				# qqline(asin(sqrt(cal.lim$RA)))
-
+			
 
 
 bug.cal_high.res <- cal.lim %>%
-	left_join(taxa.otu, by = c('TaxaID_v2')) %>%
-	select(site.id, OTU_high.res, RA) %>%
+	left_join(taxa.otu, by = c('TaxaID_v2')) 
+
+
+bug.cal_high.res <- bug.cal_high.res %>%
+	select(sample.id, OTU_high.res, RA) %>%
 	filter(OTU_high.res != 666) 
 # sum RA's across all OTUs--should see a reduction in rows
-bug.cal_high.res<-plyr::ddply(.data = bug.cal_high.res, c('site.id', 'OTU_high.res'), 
+bug.cal_high.res<-plyr::ddply(.data = bug.cal_high.res, c('sample.id', 'OTU_high.res'), 
 							  plyr::summarize, RA=sum(RA))
 
 
-					#bug.cal_high.res$RA.trans <- asin(sqrt(bug.cal_high.res$RA))
+bug.cal_high.res_totRA <- bug.cal_high.res %>%
+				group_by(sample.id) %>%
+				summarise(tot.RA = sum(RA))				
+
+hist(bug.cal_high.res_totRA$tot.RA)
+
+f <- bug.cal_high.res_totRA %>%
+	filter (tot.RA < 0.4)
+
 
 # need to crosstab the bug data (turn into a wide format) so that OTUs are columns
 
-# high res
 bug.cal_high_wide <- bug.cal_high.res %>% 
-	pivot_wider(id_cols = site.id, names_from = OTU_high.res, values_from = RA,
+	pivot_wider(id_cols = sample.id, names_from = OTU_high.res, values_from = RA,
 					values_fn = sum) 
 bug.cal_high_wide[is.na(bug.cal_high_wide)] <- 0
-bug.cal_high_wide <-	column_to_rownames(bug.cal_high_wide, 'site.id')
+bug.cal_high_wide <-	column_to_rownames(bug.cal_high_wide, 'sample.id')
 
 
-								# # create a wide dataset for RA.trans
-								# bug.cal_high_wide_RA.trans <- bug.cal_high.res %>% 
-								# 	pivot_wider(id_cols = site.id, names_from = OTU_high.res, values_from = RA.trans,
-								# 					values_fn = sum) 
-								# bug.cal_high_wide_RA.trans[is.na(bug.cal_high_wide_RA.trans)] <- 0
-								# bug.cal_high_wide_RA.trans <-	column_to_rownames(bug.cal_high_wide_RA.trans, 'site.id')
-
+								
 
 
 
@@ -133,37 +139,28 @@ bug.cal_high_wide <-	column_to_rownames(bug.cal_high_wide, 'site.id')
 ####
 val.lim <- val %>%
 	select(UniqueID_v2, TaxaID_v2, RA) %>%
-	rename(site.id = UniqueID_v2)
+	rename(sample.id = UniqueID_v2)
 
 bug.val_high.res <- val.lim %>%
 	left_join(taxa.otu, by = c('TaxaID_v2')) %>%
-	select(site.id, OTU_high.res, RA) %>%
+	select(sample.id, OTU_high.res, RA) %>%
 	filter(OTU_high.res != 666) 
 
 # sum RA's across all OTUs--should see a reduction in rows
-bug.val_high.res<-plyr::ddply(.data = bug.val_high.res, c('site.id', 'OTU_high.res'), 
+bug.val_high.res<-plyr::ddply(.data = bug.val_high.res, c('sample.id', 'OTU_high.res'), 
 										plyr::summarize, RA=sum(RA))
 
-
-						# bug.val_high.res$RA.trans <- asin(sqrt(bug.val_high.res$RA))
 
 
 # need to crosstab the bug data (turn into a wide format) so that OTUs are columns
 
-# high res
 bug.val_high_wide <- bug.val_high.res %>% 
-	pivot_wider(id_cols = site.id, names_from = OTU_high.res, values_from = RA,
+	pivot_wider(id_cols = sample.id, names_from = OTU_high.res, values_from = RA,
 					values_fn = sum) 
 bug.val_high_wide[is.na(bug.val_high_wide)] <- 0
-bug.val_high_wide <-	column_to_rownames(bug.val_high_wide, 'site.id')
+bug.val_high_wide <-	column_to_rownames(bug.val_high_wide, 'sample.id')
 
-							# # create a data set for transformed RA
-							# bug.val_high_wide_RA.trans <- bug.val_high.res %>% 
-							# 	pivot_wider(id_cols = site.id, names_from = OTU_high.res, values_from = RA.trans,
-							# 					values_fn = sum) 
-							# bug.val_high_wide_RA.trans[is.na(bug.val_high_wide_RA.trans)] <- 0
-							# bug.val_high_wide_RA.trans <-	column_to_rownames(bug.val_high_wide_RA.trans, 'site.id')
-
+							
 
 #####
 #####
@@ -173,42 +170,45 @@ bug.val_high_wide <-	column_to_rownames(bug.val_high_wide, 'site.id')
 #####
 #####
 
-# cal
-env.cal <- cal %>%
-	select(UniqueID_v2, MWMT_final) %>%
-	rename(site.id = UniqueID_v2) %>%
+# cal  -----> based on ANNUAL MWMT
+env.cal <- site.data %>%
+	filter(calval == 'CAL') %>%
+	select(UniqueID_v2, MWMT_TolAnal) %>%		#@@@@@@@@@@@@@@@@@@@@@@@@@@@
+	rename(sample.id = UniqueID_v2) %>%
+	rename(MWMT_annual = 'MWMT_TolAnal') %>%   #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 	distinct_all()
 
-			
+
+env.cal <-	column_to_rownames(env.cal, 'sample.id')			
+
 							# # is there model improvement if we drop low and high temp sites--low 'n' and creates high model errors?
 							# env.cal_10.25 <- env.cal %>%
-							# 	filter(MWMT_final > 9.99 & MWMT_final < 25.01)
+							# 	filter(MWMT_annual > 9.99 & MWMT_annual < 25.01)
 							# bug.cal_high_wide_10.25 <- left_join(rownames_to_column(env.cal_10.25), rownames_to_column(bug.cal_high_wide), by=c("rowname"))
 							# rownames(bug.cal_high_wide_10.25) <- bug.cal_high_wide_10.25$rowname
 							# bug.cal_high_wide_10.25 <- bug.cal_high_wide_10.25 %>%
-							# 	select(-c(rowname, MWMT_final))
+							# 	select(-c(rowname, MWMT_annual))
 							
-env.cal <-	column_to_rownames(env.cal, 'site.id')
 
 
-							# hist(env.cal$MWMT_final)
-							# qqnorm(env.cal$MWMT_final ,main="QQ plot of MWMT data",pch=19)
-							# qqline(env.cal$MWMT_final)
 
-# val
-env.val <- val %>%
-	select(UniqueID_v2, MWMT_final) %>%
-	rename(site.id = UniqueID_v2) %>%
+							# hist(env.cal$MWMT_annual)
+							# qqnorm(env.cal$MWMT_annual ,main="QQ plot of MWMT data",pch=19)
+							# qqline(env.cal$MWMT_annual)
+
+# val --------> based on ANNUAL MWMT
+env.val <- site.data %>%
+	filter(calval == 'VAL') %>%
+	select(UniqueID_v2, MWMT_TolAnal) %>%    #@@@@@@@@@@@@@@@@@@@@@@@@@
+	rename(sample.id = UniqueID_v2) %>%
+	rename(MWMT_annual = 'MWMT_TolAnal') %>%       #@@@@@@@@@@@@@@@@@@@@@@@@@@@
 	distinct_all()
 
 
-env.val <-	column_to_rownames(env.val, 'site.id')
+env.val <-	column_to_rownames(env.val, 'sample.id')
 
 
-							# hist(env.val$MWMT_final)
-							# qqnorm(env.val$MWMT_final ,main="QQ plot of MWMT data",pch=19)
-							# qqline(env.val$MWMT_final)
-							# 
+							
 
 #####
 #####
@@ -219,9 +219,12 @@ env.val <-	column_to_rownames(env.val, 'site.id')
 #####
 
 
-# high res
 spec <- bug.cal_high_wide
-env <- env.cal							
+env <- env.cal		
+
+
+
+
 							# spec_10.25 <- bug.cal_high_wide_10.25
 							# env_10.25 <- env.cal_10.25
 
@@ -235,8 +238,8 @@ wa_high.res <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.
 		
 		
 
-wa_high.res # 342 taxa, RMSE (inv/cla) = 2.2/2.7, r2 = 0.687 (both), max bias 6.4/3.7
-				# tol.dw: RMSE = 2.2/2.6, r2 = 0.70, max bias = 6.3/3.6
+wa_high.res 
+				
 
 crossval(wa_high.res, cv.method="bootstrap", verbose=TRUE, ngroups=10,
 			nboot=1000, h.cutoff=0, h.dist=NULL)
@@ -267,41 +270,8 @@ plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=TRUE, deshrink="classical",
 	  xlab="MWMT", ylab="residuals (MTSI)", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
 	  add.smooth=TRUE, main='Classical deshrinking: tolerance downweighted')
 
-				# # high res---RA.trans
-				# spec <- bug.cal_high_wide_RA.trans
-				# env <- env.cal
-				# 
-				# wa_high.res_RA.trans <- WA(y=spec, x=env, mono=TRUE, tolDW = TRUE, use.N2=TRUE, tol.cut=.01, 
-				# 						check.data=TRUE, lean=FALSE)
-				# 
-				# wa_high.res_RA.trans # 342 taxa, RMSE (inv/cla) = 2.2/2.7, r2 = 0.687 (both), max bias 6.4/3.7
-				# 
-				# crossval(wa_high.res_RA.trans, cv.method="loo", verbose=TRUE, ngroups=10,
-				# 			nboot=100, h.cutoff=0, h.dist=NULL)
-				# crossval results almost exactly the same as original
 				
-				
-				
-# 				performance(wa_high.res_RA.trans) # RMSE 2.1/2.5, r2 0.73/0.73, max bias 6.4/4.0
-# 				
-# 				names(wa_high.res_RA.trans)
-# 				wa_high.res$fitted.values_RA.trans
-# 				wa_high.res$coefficients_RA.trans
-# 				wa_high.res$cv.summary_RA.trans
-# 				
-# 				
-# 				predict(wa_high.res_RA.trans, newdata=bug.val_high_wide_RA.trans, sse=FALSE, nboot=100,
-# 						  match.data=TRUE, verbose=TRUE)
-# 				
-# 				# plot inferred vs MWMT
-# 				plot(wa_high.res_RA.trans, resid=FALSE, xval=FALSE, tolDW=FALSE, deshrink="classical",
-# 					  xlab="MWMT", ylab="Inferred temp (MWMT)", ylim=c(0,40), xlim=c(0,40), add.ref=TRUE,
-# 					  add.smooth=TRUE)
-# 				
-# 				# plot residuals -- INVERSE shows BIAS, CLASSICAL doesn't
-# 				plot(wa_high.res_RA.trans, resid=TRUE, xval=FALSE, tolDW=FALSE, deshrink="classical",
-# 					  xlab="MWMT", ylab="residuals", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
-# 					  add.smooth=TRUE)
+
 # ######
 				
 # make predictions for VAL dataset				
@@ -321,18 +291,18 @@ VAL.predicts <- cbind(VAL.predicts, env.val)
 
 
 VAL.rmsep <- VAL.predicts %>%
-	mutate(VAL_WA.inv_rmsep = sqrt(mean((VAL.predicts$WA.inv - VAL.predicts$MWMT_final)^2))) %>%
-	mutate(VAL_WA.cla_rmsep = sqrt(mean((VAL.predicts$WA.cla - VAL.predicts$MWMT_final)^2)))	%>%	 
-	mutate(VAL_WA.m_rmsep = sqrt(mean((VAL.predicts$WA.m - VAL.predicts$MWMT_final)^2)))		 %>%
-	mutate(VAL_WA.inv.tol_rmsep = sqrt(mean((VAL.predicts$WA.inv.tol - VAL.predicts$MWMT_final)^2)))	%>%	 
-	mutate(VAL_WA.cla.tol_rmsep = sqrt(mean((VAL.predicts$WA.cla.tol - VAL.predicts$MWMT_final)^2)))	%>%	 
-	mutate(VAL_WA.m.tol_rmsep = sqrt(mean((VAL.predicts$WA.m.tol - VAL.predicts$MWMT_final)^2)))	%>%
-	mutate(VAL.WA.inv_rsq = cor(VAL.predicts$WA.inv, VAL.predicts$MWMT_final)^2) 	%>%
-	mutate(VAL.WA.cla_rsq = cor(VAL.predicts$WA.cla, VAL.predicts$MWMT_final)^2)		%>%
-	mutate(VAL.WA.m_rsq = cor(VAL.predicts$WA.m, VAL.predicts$MWMT_final)^2)			%>%
-	mutate(VAL.WA.inv.tol_rsq = cor(VAL.predicts$WA.inv.tol, VAL.predicts$MWMT_final)^2)	%>%
-	mutate(VAL.WA.cla.tol_rsq = cor(VAL.predicts$WA.cla.tol, VAL.predicts$MWMT_final)^2)	%>%
-	mutate(VAL.WA.m.tol_rsq = cor(VAL.predicts$WA.m.tol, VAL.predicts$MWMT_final)^2)
+	mutate(VAL_WA.inv_rmsep = sqrt(mean((VAL.predicts$WA.inv - VAL.predicts$MWMT_annual)^2))) %>%
+	mutate(VAL_WA.cla_rmsep = sqrt(mean((VAL.predicts$WA.cla - VAL.predicts$MWMT_annual)^2)))	%>%	 
+	mutate(VAL_WA.m_rmsep = sqrt(mean((VAL.predicts$WA.m - VAL.predicts$MWMT_annual)^2)))		 %>%
+	mutate(VAL_WA.inv.tol_rmsep = sqrt(mean((VAL.predicts$WA.inv.tol - VAL.predicts$MWMT_annual)^2)))	%>%	 
+	mutate(VAL_WA.cla.tol_rmsep = sqrt(mean((VAL.predicts$WA.cla.tol - VAL.predicts$MWMT_annual)^2)))	%>%	 
+	mutate(VAL_WA.m.tol_rmsep = sqrt(mean((VAL.predicts$WA.m.tol - VAL.predicts$MWMT_annual)^2)))	%>%
+	mutate(VAL.WA.inv_rsq = cor(VAL.predicts$WA.inv, VAL.predicts$MWMT_annual)^2) 	%>%
+	mutate(VAL.WA.cla_rsq = cor(VAL.predicts$WA.cla, VAL.predicts$MWMT_annual)^2)		%>%
+	mutate(VAL.WA.m_rsq = cor(VAL.predicts$WA.m, VAL.predicts$MWMT_annual)^2)			%>%
+	mutate(VAL.WA.inv.tol_rsq = cor(VAL.predicts$WA.inv.tol, VAL.predicts$MWMT_annual)^2)	%>%
+	mutate(VAL.WA.cla.tol_rsq = cor(VAL.predicts$WA.cla.tol, VAL.predicts$MWMT_annual)^2)	%>%
+	mutate(VAL.WA.m.tol_rsq = cor(VAL.predicts$WA.m.tol, VAL.predicts$MWMT_annual)^2)
 
 VAL.rmsep <- VAL.rmsep[,8:19]
 VAL.rmsep <- distinct(VAL.rmsep)
@@ -346,26 +316,24 @@ row.names(VAL.rmsep) <- NULL
 #####
 					
 # join MWMT and Inferred values, plus site specific data
+		
+site.data_calval <- site.data %>%
+	filter(calval != 'NOT_CALVAL')
 
-site.data <- read.csv('SiteData_20220125.csv')
-
-
-
-site.data <- site.data %>%
-				rename('sample.id' = 'UniqueID_v2') %>%
-				filter(use.final == 'Y') # drop boat and may sample ( n = 99)
-
-			
-
-
-eco.cnt <- site.data %>%
+eco.cnt <- site.data_calval %>%
 	group_by(calval, eco3) %>%
 	summarize(count = n()) %>%
 	pivot_wider(names_from = calval, values_from = count)
 
 # numerical summaries -- need to remove categorical vars
-site.data_num <- site.data %>%
-	select(sample.id, siteid, calval, daynum, Year, MWMT_final, lat, long, slope_nhd, wsarea_km2, elev_m, IWI, PctForCat, PctForWs)
+site.data_num <- site.data_calval %>%
+	rename(sample.id = UniqueID_v2) %>%
+	select(sample.id, siteid, calval, lat, long, daynum, Year, MWMT_TolAnal,  slope_nhd, wsarea_km2, elev_m, IWI, 
+			 PctUrbWs, PctAgWs, PctForWs, RdDensWs, Tmean8110Ws, Precip8110Ws)
+
+site.data_num <- site.data_num %>%
+	rename(MWMT_Annual = MWMT_TolAnal)
+
 
 site.data_num.long <- site.data_num %>%
 	pivot_longer(!c(sample.id, siteid, calval)  , names_to = "variable", values_to = "value")
@@ -392,7 +360,7 @@ write.csv(sum.stats, 'sum.stats.csv')
 	xlab("")+ 
 	facet_wrap(~variable, scales = "free") +
 	theme(axis.text.x = element_text(angle = 45, hjust = 1))
-	
+
 
 # PCA
 
@@ -403,38 +371,55 @@ library(factoextra)
 								# remove columns with "zero variance"
 								#which(apply(site.data_num, 2, var)==0)  
 # remove incomplete cases
-site.data_pca <- site.data[complete.cases(site.data), ]
-		# missing data blows up the PCA -- remove rows with missing data
-								#site.data_complete <- site.data_complete %>% select(!PctForWs) # highly correlated with 'PctForCat'
+site.data_pca <- site.data_num[complete.cases(site.data_num), ]
 
+# remove extreme WSarea outlier
+site.data_pca <- site.data_pca %>%
+	filter(sample.id != 'SampEPA_5080_1')
+
+
+@@@@@@@@@@@@@@@@@@@@@@
 # data transformations
-								#colnames(site.data_pca)
+@@@@@@@@@@@@@@@@@@@@@@								#colnames(site.data_pca)
 
 								source("transform.variables[2_asinsqrt].r")
 								transform.view2(site.data_pca)
-									# MWMT = none
-									# Year = none
-									# Daynum = none
-									# lat = none
-									# long = none
-									# slope = log10 +1
-									# ws.area = log 10
-									# elev = sqrt
-									# iwi = nothing makes better
-									# pctforestcat = asain(sqrt)
+									
+								
+								
+								#         lat  							none            
+								#         long          				none
+								#         daynum        				none
+								#         Year          				none
+								#		    MWMT_Annual   				none
+								#	       slope_nhd              	log10 + 1
+								#         wsarea_km2             	log10 
+								#         elev_m              		sqrt
+								#         IWI           				none
+								#         PctUrbWs            		log10 + 1 
+								#         PctAgWs             		log10 + 1
+								#         PctForWs                  asin(sqrt)
+								#         RdDensWs            		log10 + 1
+								#         Tmean8110Ws         		none
+								#         Precip8110Ws        		sqrt
 
 site.data_pca.trans <- site.data_pca %>%
-	#select(sample.id, CollDate, siteid, calval, MWMT_final, Year, daynum, Ecoregion_name, 
-	#		 eco3, lat, long) %>%
 	mutate(slope.log = log10(slope_nhd + 1)) %>%
 	mutate(wsarea.log = log10(wsarea_km2))   %>%
 	mutate(elev.sqrt = sqrt(elev_m)) %>%
-	mutate(forest.asin = asin(sqrt(PctForCat/100)))
+	mutate(pct.urban_log = log10(PctUrbWs + 1)) %>%
+	mutate(pct.ag_log = log10(PctAgWs + 1))   %>%
+	mutate(pct.forest_asin = asin(sqrt(PctForWs/100)))  %>%
+	mutate(road.den_log = log10(RdDensWs + 1)) %>%
+	mutate(Precip_sqrt = sqrt(Precip8110Ws))
 	
+	
+site.data_pca.trans <- site.data_pca.trans %>%
+	select(sample.id, siteid, calval, lat, long, Year, daynum, MWMT_Annual, slope.log, 
+			 wsarea.log, elev.sqrt, IWI, pct.urban_log, pct.ag_log, pct.forest_asin, 
+			 road.den_log, Tmean8110Ws, Precip_sqrt)
 
-				# slope, elev = sqrt
-				# wsarea = log10
-
+				
 
 								#rownames(site.data_complete) <- site.data_complete[,1]
 								#site.data_pca <- site.data_complete[,-c(1:3)]
@@ -446,7 +431,7 @@ library("factoextra")
 library("corrplot")
 
 
-pca.allsites <- PCA(site.data_pca.trans[,c(5:7, 10:11, 15,23:26)], graph = FALSE, scale.unit = TRUE)
+pca.allsites <- PCA(site.data_pca.trans[ , c(4:18)], graph = FALSE, scale.unit = TRUE)
 
 summary(pca.allsites)
 				# str(pca.allsites)
@@ -541,6 +526,7 @@ WA.resid.high_2 <- WA.resid.high %>%
 
 
 site.data_residuals <- site.data %>%
+							 rename(sample.id = UniqueID_v2)  %>%
 							 inner_join(WA.resid.high_2, by = c('sample.id'))
 
 
@@ -568,9 +554,9 @@ p + geom_point()	+ geom_smooth(method="lm")
 								 
 # residuals ~ watershed area
 p <- ggplot(data=site.data_residuals, aes(x=wsarea_km2, y=WA.resid_high))
-p + geom_point()	+ geom_smooth(method="lm")	+ xlim(c(0, 100000))									 
-			
-	@@@@ some very large watrersheds....????
+p + geom_point()	+ geom_smooth(method="lm")	+ xlim(c(0, 25000))	
+
+@@@@@ problematic?
 	
 
 # residuals ~ elevation
@@ -580,7 +566,11 @@ p + geom_point()	+ geom_smooth(method="lm")
 								 
 # residuals ~ IWI
 p <- ggplot(data=site.data_residuals, aes(x=IWI, y=WA.resid_high))
-p + geom_point()		+ geom_smooth(method="lm")				
+p + geom_point()		+ geom_smooth(method="lm")	
+
+
+@@@@@@@@@ MTTI higher than observed MWMT at disturbed sites--makes sense?  
+@@@@@@@@@ More tolerant taxa = higher WAopt 
 
 # residuals ~ daynum
 p <- ggplot(data=site.data_residuals, aes(x=daynum, y=WA.resid_high))
@@ -600,13 +590,13 @@ p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 0, vjust=.5)
 								 
 # residuals ~ Year
 p <- ggplot(data=site.data_residuals, aes(x=as.factor(Year), y=WA.resid_high))								 
-p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 0, vjust=.5))+
+p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 90, vjust=.5))+
 	geom_hline(yintercept=0, linetype="dashed", color = "red") 
 		
 		p + geom_point()		+ geom_smooth(method="lm")				
 
 # residuals ~ Collection Method
-p <- ggplot(data=site.data_residuals, aes(x=as.factor(Method_SLH), y=WA.resid_high))								 
+p <- ggplot(data=site.data_residuals, aes(x=as.factor(CollMeth), y=WA.resid_high))								 
 p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 0, vjust=.5))+
 	geom_hline(yintercept=0, linetype="dashed", color = "red") 
 
@@ -694,7 +684,7 @@ palaeoSig
 
 # need to convert env to vector, not dataframe
 
-env.vector <- env.cal$MWMT_final
+env.vector <- env.cal$MWMT_annual
 
 IKFA(y=spec, x=env.vector, nFact = 5, IsPoly = FALSE, IsRot = TRUE,
 	  ccoef = 1:nFact, check.data=TRUE, lean=FALSE)
