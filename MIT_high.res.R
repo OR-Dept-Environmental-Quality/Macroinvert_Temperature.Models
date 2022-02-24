@@ -35,6 +35,11 @@ site.data <- read.csv('_SiteData_forShannon_20220213.csv')
 site.data <- site.data[order(site.data$UniqueID_v2),]	
 
 
+site.data_calval <- site.data %>%
+	filter(calval != 'NOT_CALVAL') %>%
+	rename(sample.id = UniqueID_v2)
+
+
 #####
 #####
 #			bring in taxonomy lookup table 
@@ -71,8 +76,8 @@ bugs_7977 <- read.csv('_Bio_ALL_7977.csv') # non-wadeable sites removed
 cal <- bugs_7977 %>%
 	filter(dataset == 'CAL') # calibration data set, used to build the models (starting 'n' = 3658)
 
-
-
+	
+	
 val <- bugs_7977 %>%
 	filter(dataset == 'VAL') # independent validation data set, used to get better error 
 									 # estimates of model performance (starting 'n' = 603)
@@ -111,14 +116,16 @@ bug.cal_high.res<-plyr::ddply(.data = bug.cal_high.res, c('sample.id', 'OTU_high
 							  plyr::summarize, RA=sum(RA))
 
 
-bug.cal_high.res_totRA <- bug.cal_high.res %>%
-				group_by(sample.id) %>%
-				summarise(tot.RA = sum(RA))				
+				# bug.cal_high.res_totRA <- bug.cal_high.res %>%
+				# 				group_by(sample.id) %>%
+				# 				summarise(tot.RA = sum(RA))				
 
 hist(bug.cal_high.res_totRA$tot.RA)
 
-f <- bug.cal_high.res_totRA %>%
-	filter (tot.RA < 0.4)
+		# totRA_0.2 <- (bug.cal_high.res_totRA[bug.cal_high.res_totRA$tot.RA>0.1, 1])
+		# totRA_0.2 <- totRA_0.2$sample.id
+		# # 
+
 
 
 # need to crosstab the bug data (turn into a wide format) so that OTUs are columns
@@ -129,8 +136,16 @@ bug.cal_high_wide <- bug.cal_high.res %>%
 bug.cal_high_wide[is.na(bug.cal_high_wide)] <- 0
 bug.cal_high_wide <-	column_to_rownames(bug.cal_high_wide, 'sample.id')
 
+# 
+# 				bug.cal_RA_0.2 <- bug.cal_high_wide %>%
+# 					mutate(sample.id = row.names(bug.cal_high_wide))
+# 
+# 				bug.cal_RA_0.2<-bug.cal_RA_0.2 %>%
+# 					filter(sample.id %in% totRA_0.2)	%>%
+# 					select(-sample.id)
 
-								
+
+
 
 
 
@@ -171,6 +186,7 @@ bug.val_high_wide <-	column_to_rownames(bug.val_high_wide, 'sample.id')
 #####
 
 # cal  -----> based on ANNUAL MWMT
+
 env.cal <- site.data %>%
 	filter(calval == 'CAL') %>%
 	select(UniqueID_v2, MWMT_TolAnal) %>%		#@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -179,7 +195,16 @@ env.cal <- site.data %>%
 	distinct_all()
 
 
-env.cal <-	column_to_rownames(env.cal, 'sample.id')			
+env.cal <-	column_to_rownames(env.cal, 'sample.id')		
+
+# 
+# 								env.cal_0.2 <- env.cal %>%
+# 										mutate(sample.id = row.names(env.cal))
+# 
+# 
+# 								env.cal_0.2<-env.cal_0.2 %>%
+# 									filter(sample.id %in% totRA_0.2)	%>%
+# 									select(-sample.id)
 
 							# # is there model improvement if we drop low and high temp sites--low 'n' and creates high model errors?
 							# env.cal_10.25 <- env.cal %>%
@@ -220,8 +245,11 @@ env.val <-	column_to_rownames(env.val, 'sample.id')
 
 
 spec <- bug.cal_high_wide
-env <- env.cal		
 
+					#	spec_0.2 = bug.cal_RA_0.2
+
+env <- env.cal		
+					#	env_0.2 = env.cal_0.2
 
 
 
@@ -262,12 +290,12 @@ WA.resid.high <- as.data.frame(WA.resid_high)
 
 # plot inferred vs MWMT
 plot(wa_high.res, resid=FALSE, xval=FALSE, tolDW=TRUE, deshrink="classical",
-	  xlab="MWMT", ylab="MTSI (inferred MWMT)", main="Classical deshrinking: tolerance downweighted", 
+	  xlab="MWMT", ylab="MTTI", main="Classical deshrinking: tolerance downweighted", 
 	  ylim=c(0,40), xlim=c(0,40), add.ref=TRUE, add.smooth=TRUE)
 
 # plot residuals -- INVERSE shows BIAS, CLASSICAL doesn't
 plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=TRUE, deshrink="classical",
-	  xlab="MWMT", ylab="residuals (MTSI)", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
+	  xlab="MWMT", ylab="residuals (MTTI)", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
 	  add.smooth=TRUE, main='Classical deshrinking: tolerance downweighted')
 
 				
@@ -309,6 +337,45 @@ VAL.rmsep <- distinct(VAL.rmsep)
 row.names(VAL.rmsep) <- NULL
 
 
+
+###
+
+#				Get predicted MTTI for CAL and VAL
+
+###
+
+cal_wa.cla.tol <- as.data.frame(wa_high.res$fitted.values)
+cal_wa.cla.tol <- as.data.frame(wa_high.res$fitted.values[,5])
+cal_wa.cla.tol <- cal_wa.cla.tol %>% rename(MTTI = `wa_high.res$fitted.values[, 5]`)
+cal_wa.cla.tol$Model <- "CAL"
+
+val_wa.cla.tol <- VAL.predicts[,-c(1:4,6)]
+val_wa.cla.tol <- VAL.predicts %>%
+	select(WA.cla.tol) %>%
+	rename(MTTI = WA.cla.tol)
+val_wa.cla.tol$Model <- "VAL"
+
+MTTI_cal.val <- rbind(cal_wa.cla.tol, val_wa.cla.tol)
+
+MTTI_cal.val$sample.id <- row.names(MTTI_cal.val)
+
+MTTI_cal.val <- MTTI_cal.val %>%
+	left_join(site.data_calval, by=c('sample.id'))
+
+
+
+					# check for duplicates
+					# n_occur <- data.frame(table(site.data_calval$UniqueID_v2))
+					
+					# n_occur[n_occur$Freq > 1,]
+					
+					# MTTI_cal.val[MTTI_cal.val$sample.id %in% n_occur$Var1[n_occur$Freq > 1],]
+
+
+
+
+write.csv(MTTI_cal.val, 'MTTI_cal.val.csv')
+
 ######
 
 #			Look for potential BIAS in predictions - natural gradients, disturbance, etc.
@@ -317,17 +384,18 @@ row.names(VAL.rmsep) <- NULL
 					
 # join MWMT and Inferred values, plus site specific data
 		
-site.data_calval <- site.data %>%
-	filter(calval != 'NOT_CALVAL')
+
 
 eco.cnt <- site.data_calval %>%
 	group_by(calval, eco3) %>%
 	summarize(count = n()) %>%
 	pivot_wider(names_from = calval, values_from = count)
 
+write.csv(eco.cnt, 'ecoregion_count.csv')
+
 # numerical summaries -- need to remove categorical vars
 site.data_num <- site.data_calval %>%
-	rename(sample.id = UniqueID_v2) %>%
+	# rename(sample.id = UniqueID_v2) %>%
 	select(sample.id, siteid, calval, lat, long, daynum, Year, MWMT_TolAnal,  slope_nhd, wsarea_km2, elev_m, IWI, 
 			 PctUrbWs, PctAgWs, PctForWs, RdDensWs, Tmean8110Ws, Precip8110Ws)
 
@@ -420,7 +488,13 @@ site.data_pca.trans <- site.data_pca.trans %>%
 			 road.den_log, Tmean8110Ws, Precip_sqrt)
 
 				
-
+site.data_pca.trans_LIM <- site.data_pca.trans %>%
+	select(sample.id, siteid, calval, lat, long, Year, daynum, MWMT_Annual, slope.log, 
+			  wsarea.log, elev.sqrt, IWI, Tmean8110Ws, Precip_sqrt) %>%
+	rename(MWMT = MWMT_Annual, slope_nhd = slope.log, elev_m = elev.sqrt, 
+			 Precip8110Ws = Precip_sqrt, wsarea_km2 = wsarea.log)
+	
+	
 								#rownames(site.data_complete) <- site.data_complete[,1]
 								#site.data_pca <- site.data_complete[,-c(1:3)]
 
@@ -431,7 +505,7 @@ library("factoextra")
 library("corrplot")
 
 
-pca.allsites <- PCA(site.data_pca.trans[ , c(4:18)], graph = FALSE, scale.unit = TRUE)
+pca.allsites <- PCA(site.data_pca.trans_LIM[ , c(4:14)], graph = FALSE, scale.unit = TRUE)
 
 summary(pca.allsites)
 				# str(pca.allsites)
@@ -502,7 +576,6 @@ fviz_pca_ind(pca.allsites,
 
 @@@ how to unlabel all points (individuals)?
 	
-@@@ how to add variable biplot as well?  It owuld be nice to see what is driving the sites in upper-left.
 
 
 
@@ -517,7 +590,7 @@ fviz_pca_ind(pca.allsites,
 ######
 
 # BIAS = look for patterns in CAL predictions--do we see bias associated with other variables?
-			@@@@ do we need to look at VAL as well?
+		
 ######
 
 WA.resid.high_2 <- WA.resid.high %>%
@@ -556,8 +629,6 @@ p + geom_point()	+ geom_smooth(method="lm")
 p <- ggplot(data=site.data_residuals, aes(x=wsarea_km2, y=WA.resid_high))
 p + geom_point()	+ geom_smooth(method="lm")	+ xlim(c(0, 25000))	
 
-@@@@@ problematic?
-	
 
 # residuals ~ elevation
 p <- ggplot(data=site.data_residuals, aes(x=elev_m, y=WA.resid_high))
@@ -606,6 +677,13 @@ p <- ggplot(data=site.data_residuals, aes(x=as.factor(SourceEntity), y=WA.resid_
 p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 90, vjust=.5))+
 	geom_hline(yintercept=0, linetype="dashed", color = "red") 
 
+
+
+
+# residuals ~ Lab
+p <- ggplot(data=site.data_residuals, aes(x=as.factor(lab), y=WA.resid_high))								 
+p + geom_boxplot() + theme(axis.text.x=element_text(size=8, angle = 90, vjust=.5))+
+	geom_hline(yintercept=0, linetype="dashed", color = "red") 
 
 
 #####
