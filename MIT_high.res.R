@@ -336,8 +336,36 @@ VAL.rmsep <- VAL.rmsep[,8:19]
 VAL.rmsep <- distinct(VAL.rmsep)
 row.names(VAL.rmsep) <- NULL
 
+# calculate Max Bias for VAL
+				# From ter Braak and Jugins 1993: For estimation of the maximum bias, the sampling interval (0, 100) was subdivided 
+				# into 10 equal intervals, the bias per interval calculated and the (signed) maximum of the 10 values calculated. 
 
+VAL.maxbias <- VAL.predicts %>%
+	select(WA.cla.tol, MWMT_annual) %>%
+	mutate(val.resid = WA.cla.tol - MWMT_annual)
 
+val.interval = (max(VAL.maxbias$MWMT_annual) - min(VAL.maxbias$MWMT_annual))/10 # range is 7.72 - 28.73....interval is every 2.1 degrees
+
+#average bias per interval
+calculate this:				mean(VAL.maxbias$val.resid), 
+for every interval below:
+
+	
+# create a new column to assign interval grouping
+VAL.maxbias$interval <- ifelse(VAL.maxbias$MWMT_annual <= 9.8, 'int.1',   
+		ifelse(VAL.maxbias$MWMT_annual > 9.8 & VAL.maxbias$MWMT_annual <= 11.9, 'int.2',  
+			ifelse(VAL.maxbias$MWMT_annual > 11.9 & VAL.maxbias$MWMT_annual <= 14.0, 'int.3',
+				ifelse(VAL.maxbias$MWMT_annual > 14.0 & VAL.maxbias$MWMT_annual <= 16.1, 'int.4',
+					ifelse(VAL.maxbias$MWMT_annual > 16.1 & VAL.maxbias$MWMT_annual <= 18.2, 'int.5',
+						ifelse(VAL.maxbias$MWMT_annual > 18.2 & VAL.maxbias$MWMT_annual <= 20.3, 'int.6',
+							ifelse(VAL.maxbias$MWMT_annual > 20.3 & VAL.maxbias$MWMT_annual <= 22.4, 'int.7',
+								ifelse(VAL.maxbias$MWMT_annual > 22.4 & VAL.maxbias$MWMT_annual <= 24.5, 'int.8', 
+									 ifelse(VAL.maxbias$MWMT_annual > 24.5 & VAL.maxbias$MWMT_annual <= 26.6, 'int.9',
+										'int.10'))))))))) 
+									 
+VAL.ave.bias <- as.data.table(VAL.maxbias %>%
+	group_by(interval) %>%
+	summarise(VAL.ave.bias = mean(val.resid)))
 ###
 
 #				Get predicted MTTI for CAL and VAL
@@ -485,7 +513,7 @@ site.data_pca.trans <- site.data_pca.trans %>%
 			 wsarea.log, elev.sqrt, IWI, pct.urban_log, pct.ag_log, pct.forest_asin, 
 			 road.den_log, Tmean8110Ws, Precip_sqrt)
 
-				
+# remove ag, roads, urban, forest ---> captured by IWI, makes plot less messy				
 site.data_pca.trans_LIM <- site.data_pca.trans %>%
 	select(sample.id, siteid, calval, lat, long, Year, daynum, MWMT_Annual, slope.log, 
 			  wsarea.log, elev.sqrt, IWI, Tmean8110Ws, Precip_sqrt) %>%
@@ -502,10 +530,16 @@ library(FactoMineR)
 library("factoextra")
 library("corrplot")
 
+# center and scale, before PCA
+site.data_pca.trans_LIM_c.s=scale(site.data_pca.trans_LIM[,c(4:14)],center=T,scale=T)
 
-pca.allsites <- PCA(site.data_pca.trans_LIM[ , c(4:14)], graph = FALSE, scale.unit = TRUE)
+pca.allsites <- PCA(site.data_pca.trans_LIM_c.s, graph = FALSE, scale.unit = TRUE)
+
+
 
 summary(pca.allsites)
+
+
 				# str(pca.allsites)
 				# print(pca.allsites)
 eig.val <- get_eigenvalue(pca.allsites) # Extract the eigenvalues/variances of principal components
@@ -541,7 +575,8 @@ corrplot(var$contrib, is.corr=FALSE)
 
 fviz_contrib(pca.allsites, choice = "var", axes = 1, top = 15)
 fviz_contrib(pca.allsites, choice = "var", axes = 2, top = 15)
-fviz_contrib(pca.allsites, choice = "var", axes = 1:2, top = 15)
+fviz_contrib(pca.allsites, choice = "var", axes = 3, top = 15)
+fviz_contrib(pca.allsites, choice = "var", axes = 1:3, top = 15)
 
 
 # The most important (or, contributing) variables can be highlighted on the correlation plot as follow:
@@ -550,17 +585,14 @@ fviz_pca_var(pca.allsites, col.var = "contrib",
 )
 
 
-fviz_pca_ind(pca.allsites, col.ind = "cos2", 
+fviz_pca_ind(pca.allsites, col.ind = "cos2", #axes = 2:3,
 				 gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
 				 repel = TRUE # Avoid text overlapping (slow if many points)
 )
 
 
-grp <- as.factor(site.data_pca$calval)
+grp <- as.factor(site.data_pca.trans_LIM$calval)
 # Color variables by groups
-fviz_pca_var(pca.allsites, col.var = grp, 
-				 palette = c("#0073C2FF", "#EFC000FF"),
-				 legend.title = "Cluster")
 
 
 fviz_pca_ind(pca.allsites,
@@ -572,14 +604,36 @@ fviz_pca_ind(pca.allsites,
 				 repel = TRUE
 )
 
-@@@ how to unlabel all points (individuals)?
-	
 
 
+fviz_pca_biplot(pca.allsites, axes=1:2,
+				 col.ind = grp, # color by groups
+				 palette = c("steelblue1",  "red"),#c("#00AFBB",  "#FC4E07")
+				 # habillage = site.data_pca$calval,
+				 # addEllipses = TRUE, # Concentration ellipses
+				 # ellipse.type = "confidence",
+				 legend.title = "Groups",
+				 repel = TRUE, #label='var', 
+				 geom.ind = c("point"), geom.var = c("arrow", "text"),
+				 col.var = 'black',
+				 alpha.ind = 1 # transparency of individuals 
+				 
+)
 
 
-
-
+fviz_pca_biplot(pca.allsites, axes=c(2,3),
+					 col.ind = grp, # color by groups
+					 palette = c("steelblue1",  "red"),#c("#00AFBB",  "#FC4E07")
+					 # habillage = site.data_pca$calval,
+					 # addEllipses = TRUE, # Concentration ellipses
+					 # ellipse.type = "confidence",
+					 legend.title = "Groups",
+					 repel = TRUE, #label='var', 
+					 geom.ind = c("point"), geom.var = c("arrow", "text"),
+					 col.var = 'black',
+					 alpha.ind = 1 # transparency of individuals 
+					 
+)
 
 
 
@@ -883,14 +937,15 @@ wapls <-	WAPLS(y=spec, x=env.cal, npls=5, iswapls=TRUE, standx=FALSE, lean=FALSE
 #####################################################
 		
 
-mets <- read.csv('C://Users/shubler/Desktop/ORWA BCG_thermal/Inference modeling/R/CAL_ThermalPrefMetrics_20220902.csv')
-
+mets <- read.csv('Metric_BioALL_wSampleInfo_20220927.csv')
+		
 mets <- mets %>%
 	rename('sample.id' = 'UniqueID_v2')
 
+mets.cal <- mets %>%
+	filter(dataset == 'CAL')
+		
 
-mtti.mets <- MTTI_cal.val %>%
-	inner_join(mets, by = 'sample.id')
 
 ##########	
 	# Explore relationships between MTTI and metrics
@@ -900,51 +955,51 @@ mtti.mets <- MTTI_cal.val %>%
 	# Number of taxa
 ##
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_stenocold))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_stenocold))
 p + geom_point()+ geom_smooth(method="lm")		
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_cold))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_cold))
 p + geom_point()+ geom_smooth(method="lm")		
 
 
 
 		
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_cool))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_cool))
 p + geom_point()+ geom_smooth(method="lm")		
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_warm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_warm))
 p + geom_point()+ geom_smooth(method="lm")		
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_stenowarm))
 p + geom_point()+ geom_smooth(method="lm")		
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_eury))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_eury))
 p + geom_point()+ geom_smooth(method="lm")		
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_cowa))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_cowa))
 p + geom_point()+ geom_smooth(method="lm")		
 
               
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_na))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_na))
 p + geom_point()+ geom_smooth(method="lm")		
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_stenocold_cold))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_stenocold_cold))
 p + geom_point()+ geom_smooth(method="lm")		
 
 
 # steno.cold to cool
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_stenocold_cold_cool))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_stenocold_cold_cool))
 p + geom_point()+ geom_smooth(method="lm")	
 
 
 # cool.warm to steno.warm
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_cowa_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_cowa_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="lm")	
 
 # warm to steno.warm
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=nt_ti_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=nt_ti_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="lm")	
 
 
@@ -953,114 +1008,120 @@ p + geom_point()+ geom_smooth(method="lm")
 	# Percent individuals
 ##
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_stenocold))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_stenocold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_cold))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_cold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_cool))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_cool))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_warm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_warm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # steno.warm
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_eury))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_eury))
 p + geom_point()+ geom_smooth(method="loess")	
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_cowa))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_cowa))
 p + geom_point()+ geom_smooth(method="loess")	
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_na))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_na))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # steno.cold + cold
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_stenocold_cold))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_stenocold_cold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # steno.cold, cold, cool
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_stenocold_cold_cool))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_stenocold_cold_cool))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # cool.warm, warm, steno.warm
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_cowa_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_cowa_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # warm, steno.warm
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pi_ti_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pi_ti_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # what if we make a ratio?
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=c(pi_ti_stenocold_cold/pi_ti_warm_stenowarm)/100))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=c(pi_ti_stenocold_cold/pi_ti_warm_stenowarm)/100))
 p + geom_point()+ geom_smooth(method="loess")	
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=c(pi_ti_warm_stenowarm/pi_ti_stenocold_cold)/100))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=c(pi_ti_warm_stenowarm/pi_ti_stenocold_cold)/100))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
+# +/- ?
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=c(pi_ti_stenocold_cold-pi_ti_warm_stenowarm)))
+p + geom_point()+ geom_smooth(method="loess")	
+
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=c(pi_ti_warm_stenowarm-pi_ti_stenocold_cold)))
+p + geom_point()+ geom_smooth(method="loess")	
 
 
 ##
 	# Percent taxa
 ##
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_stenocold))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_stenocold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_cold))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_cold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_cool))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_cool))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_warm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_warm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_eury))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_eury))
 p + geom_point()+ geom_smooth(method="loess")	
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_cowa))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_cowa))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_na))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_na))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # steno.col, cold
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_stenocold_cold))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_stenocold_cold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # steno.col, cold, cool
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_stenocold_cold_cool))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_stenocold_cold_cool))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # cool.warm, warm, stenowarm
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_cowa_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_cowa_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # warm, stenowarm
-p <- ggplot(data=mtti.mets, aes(x=MTTI, y=pt_ti_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MTTI, y=pt_ti_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
@@ -1079,52 +1140,67 @@ p + geom_point()+ geom_smooth(method="loess")
 	# Number of taxa
 ###
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_stenocold))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_stenocold))
 p + geom_point()+ geom_smooth(method="lm")		
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_cold))
-p + geom_point()+ geom_smooth(method="lm")		
-
-
-
-
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_cool))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_cold))
 p + geom_point()+ geom_smooth(method="lm")		
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_warm))
-p + geom_point()+ geom_smooth(method="lm")		
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_stenowarm))
-p + geom_point()+ geom_smooth(method="lm")		
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_eury))
-p + geom_point()+ geom_smooth(method="lm")		
-
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_cowa))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_cool))
 p + geom_point()+ geom_smooth(method="lm")		
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_na))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_warm))
+p + geom_point()+ geom_smooth(method="lm")		
+
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_stenowarm))
+p + geom_point()+ geom_smooth(method="lm")		
+
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_eury))
+p + geom_point()+ geom_smooth(method="lm")		
+
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_cowa))
 p + geom_point()+ geom_smooth(method="lm")		
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_stenocold_cold))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_na))
+p + geom_point()+ geom_smooth(method="lm")		
+
+
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_stenocold_cold))
 p + geom_point()+ geom_smooth(method="lm")		
 
 
 # steno.cold to cool
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_stenocold_cold_cool))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_stenocold_cold_cool))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # cool.warm to steno.warm
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_cowa_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_cowa_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # warm to steno.warm
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=nt_ti_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=nt_ti_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
+
+# what if we make a ratio?
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(nt_ti_stenocold_cold/nt_ti_warm_stenowarm)/100))
+p + geom_point()+ geom_smooth(method="loess")	
+
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(nt_ti_warm_stenowarm/nt_ti_stenocold_cold)/100))
+p + geom_point()+ geom_smooth(method="loess")	
+
+# +/- ?
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(nt_ti_stenocold_cold-nt_ti_warm_stenowarm)))
+p + geom_point()+ geom_smooth(method="loess")	
+
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(nt_ti_warm_stenowarm-nt_ti_stenocold_cold)))
+p + geom_point()+ geom_smooth(method="loess")
+
 
 
 
@@ -1132,116 +1208,134 @@ p + geom_point()+ geom_smooth(method="loess")
 # Percent individuals
 ##
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_stenocold))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_stenocold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_cold))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_cold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_cool))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_cool))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_warm))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_warm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # steno.warm
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_eury))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_eury))
 p + geom_point()+ geom_smooth(method="loess")	
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_cowa))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_cowa))
 p + geom_point()+ geom_smooth(method="loess")	
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_na))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_na))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # steno.cold + cold
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_stenocold_cold))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_stenocold_cold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # steno.cold, cold, cool
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_stenocold_cold_cool))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_stenocold_cold_cool))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # cool.warm, warm, steno.warm
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_cowa_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_cowa_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # warm, steno.warm
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pi_ti_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pi_ti_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # what if we make a ratio?
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=c(pi_ti_stenocold_cold/pi_ti_warm_stenowarm)/100))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(pi_ti_stenocold_cold/pi_ti_warm_stenowarm)/100))
 p + geom_point()+ geom_smooth(method="loess")	
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=c(pi_ti_warm_stenowarm/pi_ti_stenocold_cold)/100))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(pi_ti_warm_stenowarm/pi_ti_stenocold_cold)/100))
 p + geom_point()+ geom_smooth(method="loess")	
 
+# +/- ?
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(pi_ti_stenocold_cold-pi_ti_warm_stenowarm)))
+p + geom_point()+ geom_smooth(method="loess")	
 
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(pi_ti_warm_stenowarm-pi_ti_stenocold_cold)))
+p + geom_point()+ geom_smooth(method="loess")	
 
 
 ##
 # Percent taxa
 ##
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_stenocold))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_stenocold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_cold))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_cold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_cool))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_cool))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_warm))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_warm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_eury))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_eury))
 p + geom_point()+ geom_smooth(method="loess")	
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_cowa))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_cowa))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_na))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_na))
 p + geom_point()+ geom_smooth(method="loess")	
 
 # steno.col, cold
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_stenocold_cold))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_stenocold_cold))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # steno.col, cold, cool
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_stenocold_cold_cool))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_stenocold_cold_cool))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # cool.warm, warm, stenowarm
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_cowa_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_cowa_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
 
 # warm, stenowarm
-p <- ggplot(data=mtti.mets, aes(x=MWMT_TolAnal, y=pt_ti_warm_stenowarm))
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=pt_ti_warm_stenowarm))
 p + geom_point()+ geom_smooth(method="loess")	
 
+# what if we make a ratio?
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(pt_ti_stenocold_cold/pt_ti_warm_stenowarm)/100))
+p + geom_point()+ geom_smooth(method="loess")	
+
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(pt_ti_warm_stenowarm/pt_ti_stenocold_cold)/100))
+p + geom_point()+ geom_smooth(method="loess")	
+
+# +/- ?
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(pt_ti_stenocold_cold-pt_ti_warm_stenowarm)))
+p + geom_point()+ geom_smooth(method="loess")	
+
+p <- ggplot(data=mets.cal, aes(x=MWMT_TolAnal, y=c(pt_ti_warm_stenowarm-pt_ti_stenocold_cold)))
+p + geom_point()+ geom_smooth(method="loess")	
 
 
 ######################################
@@ -1253,13 +1347,54 @@ p + geom_point()+ geom_smooth(method="loess")
 ######################################
 
 
-mod <- lm(mtti.mets$MWMT_TolAnal ~ mtti.mets$pi_ti_stenocold_cold_cool + mtti.mets$pi_ti_warm_stenowarm)
+mod <- lm(mets.cal$MWMT_TolAnal ~ mets.cal$pi_ti_stenocold_cold_cool + mets.cal$pi_ti_warm_stenowarm)
 summary(mod)
 			# r2 = 0.57
 			# correlation between these two is r = -0.65
 		
-mod <- lm(mtti.mets$MWMT_TolAnal ~ mtti.mets$pi_ti_stenocold + mtti.mets$pi_ti_stenowarm)
+mod <- lm(mets.cal$MWMT_TolAnal ~ mets.cal$pi_ti_stenocold + mets.cal$pi_ti_cold + mets.cal$pi_ti_cool + mets.cal$pi_ti_warm + mets.cal$pi_ti_stenowarm)
 summary(mod)
-# r2 = 0.35	
+# r2 = 0.61
+
+@@@@ problem is these are all likely highly correlated.  Would need to go through formal process for regression model
 
 
+######################################
+######################################
+#####
+#			RF/CART model for MWMT vs metrics - can we develop a model, using metrics only,
+#			that classifies a site into a bio-thermal regime
+#####
+######################################
+######################################
+
+library(randomForest)
+
+# pare down mets dataframe to predictors and response (MWMT)
+
+met.cal_RF <- mets.cal %>%
+	select(MWMT_TolAnal, nt_total:pt_ti_na) # L3_eco_name, slope_nhd, wsarea_km2, elev_m, ICI, IWI --- these metrics have mising values and RF crashes
+	# currently including lat, long, daynum, CollDate, daynum--as a way of looking to see how much these relate to MWMT compared to bio.temp metrics
+
+RF_mwmt.mets <- randomForest(MWMT_TolAnal ~ ., data=met.cal_RF, importance=TRUE,  keep.forest=TRUE)
+RF_mwmt.mets # 74.6% variance explained 
+
+imp <- importance(RF_mwmt.mets) #, conditional = TRUE)  
+RF_mwmt.mets$importance
+
+plot(RF_mwmt.mets)
+varImpPlot(RF_mwmt.mets)   
+
+getTree(RF_mwmt.mets)
+
+
+@@@ partial dependence plots
+partialPlot(RF_mwmt.mets, met.cal_RF, MWMT_TolAnal, x.var = pt_ti_stenowarm)
+
+impvar <- rownames(imp)[order(imp[, 1], decreasing=TRUE)]
+op <- par(mfrow=c(2,2))
+for (i in seq_along(impvar)) {
+	partialPlot(RF_mwmt.mets, met.cal_RF, impvar[i], xlab=impvar[i],
+					main=paste("Partial Dependence on", impvar[i])) # , ylim=c(0,30)
+}
+par(op)
