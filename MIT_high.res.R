@@ -298,6 +298,13 @@ plot(wa_high.res, resid=TRUE, xval=FALSE, tolDW=TRUE, deshrink="classical",
 	  xlab="MWMT", ylab="residuals (MTTI)", ylim=c(-15,15), xlim=c(0,35), add.ref=TRUE,
 	  add.smooth=TRUE, main='Classical deshrinking: tolerance downweighted')
 
+
+
+##
+	### Save the WA model to be used later for getting MTTI for new samples
+	save(wa_high.res, file=('wa_high.res.Rdata'))
+##
+
 				
 
 # ######
