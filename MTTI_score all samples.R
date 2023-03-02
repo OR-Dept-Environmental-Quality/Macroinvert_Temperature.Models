@@ -22,7 +22,7 @@ library(rioja)
 #####
 #####
 
-taxa <- read.csv('_TAXA_TRANSLATOR_MASTER_20221201.csv')
+taxa <- read.csv('  .csv')   @@@@@@ pull in from BioMonTools
 
 
 
