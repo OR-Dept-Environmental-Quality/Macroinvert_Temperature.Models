@@ -36,9 +36,19 @@ library(RODBC)
 #####
 #####
 
-site.data <- read.csv('_SiteData_forShannon_20220213.csv')
+site.data <- read.csv('input files/_SiteData_7977_20220213.csv')
 
 site.data <- site.data[order(site.data$UniqueID_v2),]	
+
+
+# bring in CAL/VAL designations, based on Mark's stratified random sampling
+
+calval <- read.csv('input files/CAL.VAL/Tables/CalValSplit.csv')
+
+# join to site data
+site.data_calval <- 
+
+
 
 
 site.data_calval <- site.data %>%
