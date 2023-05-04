@@ -271,7 +271,7 @@ dev.off()
 # Run once
 if(F){
   # Set API key - Once per R session
-  # register_google(key='AIzaSyBtViuE2LzvfOKVg2XQob8T8K3eZ3Dqx1s',write=T)
+  # 
   has_google_key() # TRUE
   
   # Download basemap
